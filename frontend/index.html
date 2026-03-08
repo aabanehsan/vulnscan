@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VulnScan // Security Automation Framework</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Oxanium:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #020408; --bg2: #060d14; --panel: #0a1520; --border: #0d2535;
+    --accent: #00ff88; --accent2: #00b8ff; --warn: #ff6b35; --danger: #ff2d55;
+    --text: #c8dde8; --muted: #3a6070; --grid: rgba(0,255,136,0.03);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Share Tech Mono', monospace;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; overflow-x: hidden; cursor: crosshair;
+  }
+  body::before {
+    content:''; position:fixed; inset:0;
+    background-image: linear-gradient(var(--grid) 1px,transparent 1px), linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:40px 40px; pointer-events:none; z-index:0;
+  }
+  body::after {
+    content:''; position:fixed; top:0; left:0; right:0; height:2px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);
+    animation:scanline 4s linear infinite; z-index:100; pointer-events:none; opacity:0.6;
+  }
+  @keyframes scanline { 0%{top:-2px} 100%{top:100vh} }
+  .container { max-width:1200px; margin:0 auto; padding:24px; position:relative; z-index:1; }
+  header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:32px; padding-bottom:24px; border-bottom:1px solid var(--border); }
+  .logo { font-family:'Oxanium',sans-serif; font-weight:800; font-size:2.2rem; letter-spacing:0.1em; color:var(--accent); text-shadow:0 0 30px rgba(0,255,136,0.5),0 0 60px rgba(0,255,136,0.2); position:relative; }
+  .logo span { color:var(--accent2); }
+  .tagline { font-size:0.7rem; color:var(--muted); letter-spacing:0.3em; text-transform:uppercase; margin-top:4px; }
+  .status-bar { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .status-pill { display:flex; align-items:center; gap:8px; font-size:0.7rem; letter-spacing:0.15em; color:var(--muted); }
+  .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); animation:pulse 2s ease-in-out infinite; }
+  .dot.warn { background:var(--warn); box-shadow:0 0 8px var(--warn); }
+  .dot.danger { background:var(--danger); box-shadow:0 0 8px var(--danger); animation:blink 0.8s step-end infinite; }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+  .grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:20px; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:2px; padding:20px; position:relative; overflow:hidden; transition:border-color 0.2s,box-shadow 0.2s; }
+  .panel:hover { border-color:rgba(0,255,136,0.2); box-shadow:0 0 20px rgba(0,255,136,0.04); }
+  .panel::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--accent),transparent); opacity:0; transition:opacity 0.3s; }
+  .panel:hover::before { opacity:0.4; }
+  .panel-label { font-size:0.6rem; letter-spacing:0.35em; color:var(--muted); text-transform:uppercase; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+  .panel-label::before { content:''; display:inline-block; width:12px; height:1px; background:var(--accent); }
+  .panel.wide { grid-column:span 2; }
+  .panel.full { grid-column:span 3; }
+  .input-row { display:flex; gap:8px; margin-bottom:16px; }
+  .target-input { flex:1; background:var(--bg2); border:1px solid var(--border); color:var(--accent); font-family:'Share Tech Mono',monospace; font-size:0.85rem; padding:10px 14px; outline:none; transition:border-color 0.2s,box-shadow 0.2s; caret-color:var(--accent); }
+  .target-input::placeholder { color:var(--muted); }
+  .target-input:focus { border-color:rgba(0,255,136,0.4); box-shadow:0 0 12px rgba(0,255,136,0.08),inset 0 0 8px rgba(0,255,136,0.03); }
+  .btn { background:transparent; border:1px solid var(--accent); color:var(--accent); font-family:'Share Tech Mono',monospace; font-size:0.75rem; letter-spacing:0.15em; padding:10px 20px; cursor:pointer; text-transform:uppercase; transition:all 0.15s; position:relative; overflow:hidden; }
+  .btn::before { content:''; position:absolute; inset:0; background:var(--accent); transform:translateX(-101%); transition:transform 0.15s; z-index:0; }
+  .btn:hover::before { transform:translateX(0); }
+  .btn:hover { color:var(--bg); }
+  .btn span { position:relative; z-index:1; }
+  .btn.danger-btn { border-color:var(--danger); color:var(--danger); }
+  .btn.danger-btn::before { background:var(--danger); }
+  .btn.running { border-color:var(--warn); color:var(--warn); animation:btn-pulse 1.5s ease-in-out infinite; }
+  @keyframes btn-pulse{0%,100%{box-shadow:0 0 6px rgba(255,107,53,0.3)}50%{box-shadow:0 0 16px rgba(255,107,53,0.6)}}
+  .scan-options { display:flex; flex-wrap:wrap; gap:8px; }
+  .scan-opt { display:flex; align-items:center; gap:6px; font-size:0.72rem; color:var(--muted); cursor:pointer; padding:5px 10px; border:1px solid var(--border); transition:all 0.15s; user-select:none; }
+  .scan-opt:hover { border-color:var(--muted); color:var(--text); }
+  .scan-opt.active { border-color:rgba(0,255,136,0.4); color:var(--accent); background:rgba(0,255,136,0.04); }
+  .scan-opt input { display:none; }
+  .severity-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .sev-card { background:var(--bg2); border:1px solid var(--border); padding:14px 12px; text-align:center; position:relative; overflow:hidden; }
+  .sev-card::after { content:''; position:absolute; bottom:0; left:0; right:0; height:2px; }
+  .sev-card.critical::after { background:var(--danger); box-shadow:0 0 8px var(--danger); }
+  .sev-card.high::after { background:var(--warn); box-shadow:0 0 8px var(--warn); }
+  .sev-card.medium::after { background:#ffd700; box-shadow:0 0 8px #ffd700; }
+  .sev-card.low::after { background:var(--accent2); box-shadow:0 0 8px var(--accent2); }
+  .sev-count { font-family:'Oxanium',sans-serif; font-weight:800; font-size:2rem; line-height:1; margin-bottom:4px; }
+  .sev-card.critical .sev-count { color:var(--danger); text-shadow:0 0 16px rgba(255,45,85,0.5); }
+  .sev-card.high .sev-count { color:var(--warn); text-shadow:0 0 16px rgba(255,107,53,0.5); }
+  .sev-card.medium .sev-count { color:#ffd700; text-shadow:0 0 16px rgba(255,215,0,0.5); }
+  .sev-card.low .sev-count { color:var(--accent2); text-shadow:0 0 16px rgba(0,184,255,0.5); }
+  .sev-label { font-size:0.62rem; letter-spacing:0.2em; color:var(--muted); text-transform:uppercase; }
+  .terminal { background:var(--bg2); border:1px solid var(--border); padding:16px; height:220px; overflow-y:auto; font-size:0.75rem; line-height:1.7; scrollbar-width:thin; scrollbar-color:var(--muted) transparent; }
+  .terminal::-webkit-scrollbar { width:4px; }
+  .terminal::-webkit-scrollbar-thumb { background:var(--muted); }
+  .log-line { display:flex; gap:12px; opacity:0; animation:fadein 0.3s forwards; }
+  @keyframes fadein{to{opacity:1}}
+  .log-time { color:var(--muted); flex-shrink:0; }
+  .log-ok { color:var(--accent); } .log-warn { color:var(--warn); }
+  .log-err { color:var(--danger); } .log-info { color:var(--accent2); }
+  .log-muted { color:var(--muted); }
+  .findings-table { width:100%; border-collapse:collapse; font-size:0.75rem; }
+  .findings-table th { text-align:left; padding:8px 12px; font-size:0.6rem; letter-spacing:0.25em; color:var(--muted); border-bottom:1px solid var(--border); text-transform:uppercase; font-weight:400; }
+  .findings-table td { padding:10px 12px; border-bottom:1px solid rgba(13,37,53,0.5); vertical-align:middle; }
+  .findings-table tr:hover td { background:rgba(0,255,136,0.02); }
+  .badge { display:inline-block; padding:2px 8px; font-size:0.6rem; letter-spacing:0.15em; text-transform:uppercase; border:1px solid; }
+  .badge.critical { color:var(--danger); border-color:rgba(255,45,85,0.4); background:rgba(255,45,85,0.08); }
+  .badge.high { color:var(--warn); border-color:rgba(255,107,53,0.4); background:rgba(255,107,53,0.08); }
+  .badge.medium { color:#ffd700; border-color:rgba(255,215,0,0.4); background:rgba(255,215,0,0.08); }
+  .badge.low { color:var(--accent2); border-color:rgba(0,184,255,0.4); background:rgba(0,184,255,0.08); }
+  .vuln-type { color:var(--text); }
+  .bypass-tag { display:inline-block; padding:1px 6px; font-size:0.58rem; color:var(--muted); border:1px solid rgba(58,96,112,0.4); margin-left:4px; }
+  .scan-progress { margin-bottom:16px; }
+  .progress-header { display:flex; justify-content:space-between; font-size:0.68rem; color:var(--muted); margin-bottom:6px; }
+  .progress-track { height:3px; background:var(--border); position:relative; overflow:hidden; }
+  .progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); box-shadow:0 0 8px var(--accent); transition:width 0.4s ease; width:0%; }
+  .modules-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+  .module-item { padding:10px 8px; background:var(--bg2); border:1px solid var(--border); font-size:0.63rem; text-align:center; color:var(--muted); transition:all 0.2s; line-height:1.4; }
+  .module-item.active { border-color:rgba(0,255,136,0.3); color:var(--accent); background:rgba(0,255,136,0.04); }
+  .module-item.scanning { border-color:rgba(255,107,53,0.4); color:var(--warn); background:rgba(255,107,53,0.04); animation:module-pulse 1s ease-in-out infinite; }
+  .module-item.done { border-color:rgba(0,255,136,0.2); color:var(--muted); }
+  @keyframes module-pulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 10px rgba(255,107,53,0.2)}}
+  .module-num { font-family:'Oxanium',sans-serif; font-size:1rem; font-weight:800; display:block; margin-bottom:4px; }
+  .report-meta { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px; }
+  .meta-item { font-size:0.72rem; }
+  .meta-key { color:var(--muted); margin-bottom:3px; font-size:0.62rem; letter-spacing:0.2em; text-transform:uppercase; }
+  .meta-val { color:var(--text); }
+  .meta-val.accent { color:var(--accent); }
+  .waveform { display:flex; align-items:center; gap:3px; height:20px; }
+  .wave-bar { width:3px; background:var(--accent); border-radius:1px; opacity:0.4; animation:wave 1.2s ease-in-out infinite; }
+  @keyframes wave{0%,100%{height:4px}50%{height:16px}}
+  .ticker { border-top:1px solid var(--border); border-bottom:1px solid var(--border); padding:8px 0; overflow:hidden; margin-bottom:20px; position:relative; }
+  .ticker::before,.ticker::after { content:''; position:absolute; top:0; bottom:0; width:60px; z-index:2; }
+  .ticker::before { left:0; background:linear-gradient(90deg,var(--bg),transparent); }
+  .ticker::after { right:0; background:linear-gradient(-90deg,var(--bg),transparent); }
+  .ticker-inner { display:flex; gap:48px; animation:ticker 30s linear infinite; white-space:nowrap; font-size:0.65rem; color:var(--muted); letter-spacing:0.1em; }
+  @keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  .ticker-item { display:flex; align-items:center; gap:8px; }
+  .ticker-accent { color:var(--accent); } .ticker-warn { color:var(--warn); }
+  .panel.decorated::after { content:''; position:absolute; bottom:-1px; right:-1px; width:16px; height:16px; border-bottom:1px solid var(--accent); border-right:1px solid var(--accent); opacity:0.4; }
+  footer { margin-top:32px; padding-top:16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-size:0.62rem; color:var(--muted); letter-spacing:0.15em; }
+
+  /* API status banner */
+  .api-banner { display:flex; align-items:center; gap:10px; font-size:0.68rem; padding:8px 14px; border:1px solid var(--border); background:var(--bg2); margin-bottom:16px; }
+  .api-banner.connected { border-color:rgba(0,255,136,0.3); }
+  .api-banner.disconnected { border-color:rgba(255,45,85,0.3); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div>
+      <div class="logo">VULN<span>SCAN</span></div>
+      <div class="tagline">Multi-Stage Security Automation Framework // OWASP Top 10</div>
+    </div>
+    <div class="status-bar">
+      <div class="status-pill"><span class="dot" id="engineDot"></span> <span id="engineStatus">CHECKING ENGINE...</span></div>
+      <div class="status-pill"><span class="dot warn"></span> WAF BYPASS LOADED</div>
+      <div class="status-pill"><span class="dot danger" id="findingsDot" style="display:none"></span> <span id="findingsStatus"></span></div>
+    </div>
+  </header>
+
+  <!-- API Status -->
+  <div class="api-banner disconnected" id="apiBanner">
+    <span id="apiDot" style="width:6px;height:6px;border-radius:50%;background:var(--danger);display:inline-block"></span>
+    <span id="apiMsg">Connecting to backend at http://localhost:5000...</span>
+  </div>
+
+  <!-- Ticker -->
+  <div class="ticker">
+    <div class="ticker-inner">
+      <span class="ticker-item"><span class="ticker-accent">●</span> XSS Reflected — /search?q= parameter</span>
+      <span class="ticker-item"><span class="ticker-warn">◆</span> SQLi Time-based blind — /api/users</span>
+      <span class="ticker-item"><span class="ticker-accent">●</span> WAF bypass via unicode normalization</span>
+      <span class="ticker-item"><span class="ticker-warn">◆</span> IDOR — /api/v2/profile/{id}</span>
+      <span class="ticker-item"><span class="ticker-accent">●</span> SSRF vector via PDF generation module</span>
+      <span class="ticker-item"><span class="ticker-warn">◆</span> JWT alg:none accepted</span>
+      <span class="ticker-item"><span class="ticker-accent">●</span> XXE injection via SVG upload</span>
+      <span class="ticker-item" style="opacity:0.4">// OWASP A1-A10 coverage active</span>
+      <!-- duplicate for loop -->
+      <span class="ticker-item"><span class="ticker-accent">●</span> XSS Reflected — /search?q= parameter</span>
+      <span class="ticker-item"><span class="ticker-warn">◆</span> SQLi Time-based blind — /api/users</span>
+      <span class="ticker-item"><span class="ticker-accent">●</span> WAF bypass via unicode normalization</span>
+      <span class="ticker-item"><span class="ticker-warn">◆</span> IDOR — /api/v2/profile/{id}</span>
+      <span class="ticker-item"><span class="ticker-accent">●</span> SSRF vector via PDF generation module</span>
+      <span class="ticker-item"><span class="ticker-warn">◆</span> JWT alg:none accepted</span>
+      <span class="ticker-item"><span class="ticker-accent">●</span> XXE injection via SVG upload</span>
+      <span class="ticker-item" style="opacity:0.4">// OWASP A1-A10 coverage active</span>
+    </div>
+  </div>
+
+  <!-- Top row -->
+  <div class="grid">
+    <div class="panel wide decorated">
+      <div class="panel-label">Target Configuration</div>
+      <div class="input-row">
+        <input class="target-input" type="text" id="targetInput" placeholder="https://target.example.com">
+        <button class="btn" id="scanBtn" onclick="startScan()"><span>▶ EXECUTE SCAN</span></button>
+        <button class="btn danger-btn" onclick="abortScan()"><span>■ ABORT</span></button>
+      </div>
+      <div class="scan-options">
+        <label class="scan-opt active" data-mod="xss"><input type="checkbox" checked> XSS Injection</label>
+        <label class="scan-opt active" data-mod="sqli"><input type="checkbox" checked> SQL Injection</label>
+        <label class="scan-opt active" data-mod="auth"><input type="checkbox" checked> Auth Bypass</label>
+        <label class="scan-opt active" data-mod="idor"><input type="checkbox" checked> IDOR/BOLA</label>
+        <label class="scan-opt active" data-mod="headers"><input type="checkbox" checked> Security Headers</label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-label">Severity Summary</div>
+      <div class="severity-grid">
+        <div class="sev-card critical"><div class="sev-count" id="critCount">0</div><div class="sev-label">Critical</div></div>
+        <div class="sev-card high"><div class="sev-count" id="highCount">0</div><div class="sev-label">High</div></div>
+        <div class="sev-card medium"><div class="sev-count" id="medCount">0</div><div class="sev-label">Medium</div></div>
+        <div class="sev-card low"><div class="sev-count" id="lowCount">0</div><div class="sev-label">Low</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OWASP Modules -->
+  <div class="grid">
+    <div class="panel full">
+      <div class="panel-label">OWASP Top 10 Modules</div>
+      <div class="modules-grid">
+        <div class="module-item" id="mod0"><span class="module-num">A01</span>Broken Access Control</div>
+        <div class="module-item" id="mod1"><span class="module-num">A02</span>Cryptographic Failures</div>
+        <div class="module-item" id="mod2"><span class="module-num">A03</span>Injection</div>
+        <div class="module-item" id="mod3"><span class="module-num">A04</span>Insecure Design</div>
+        <div class="module-item" id="mod4"><span class="module-num">A05</span>Security Misconfiguration</div>
+        <div class="module-item" id="mod5"><span class="module-num">A06</span>Vulnerable Components</div>
+        <div class="module-item" id="mod6"><span class="module-num">A07</span>Auth Failures</div>
+        <div class="module-item" id="mod7"><span class="module-num">A08</span>Software Integrity</div>
+        <div class="module-item" id="mod8"><span class="module-num">A09</span>Security Logging</div>
+        <div class="module-item" id="mod9"><span class="module-num">A10</span>SSRF</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Terminal + Report meta -->
+  <div class="grid">
+    <div class="panel wide">
+      <div class="panel-label" style="justify-content:space-between">
+        <span>Scan Output</span>
+        <div class="waveform" id="waveform" style="display:none">
+          <div class="wave-bar" style="animation-delay:0s"></div>
+          <div class="wave-bar" style="animation-delay:0.1s"></div>
+          <div class="wave-bar" style="animation-delay:0.2s"></div>
+          <div class="wave-bar" style="animation-delay:0.3s"></div>
+          <div class="wave-bar" style="animation-delay:0.1s"></div>
+          <div class="wave-bar" style="animation-delay:0s"></div>
+        </div>
+      </div>
+      <div class="scan-progress">
+        <div class="progress-header">
+          <span id="progressLabel">READY</span>
+          <span id="progressPct">0%</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+      <div class="terminal" id="terminal">
+        <div class="log-line"><span class="log-time">--:--:--</span><span class="log-muted">VulnScan v2.4.1 — connecting to backend...</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-label">Report Metadata</div>
+      <div class="report-meta">
+        <div class="meta-item"><div class="meta-key">Scan ID</div><div class="meta-val accent" id="scanId">--</div></div>
+        <div class="meta-item"><div class="meta-key">Duration</div><div class="meta-val" id="scanDuration">--</div></div>
+        <div class="meta-item"><div class="meta-key">Requests</div><div class="meta-val" id="reqCount">--</div></div>
+        <div class="meta-item"><div class="meta-key">Endpoints</div><div class="meta-val" id="endpointCount">--</div></div>
+        <div class="meta-item"><div class="meta-key">WAF Detected</div><div class="meta-val" id="wafDetected">--</div></div>
+        <div class="meta-item"><div class="meta-key">Bypass Rate</div><div class="meta-val accent" id="bypassRate">--</div></div>
+      </div>
+      <button class="btn" style="width:100%;margin-top:4px" id="reportBtn" onclick="downloadReport()" disabled><span>↓ EXPORT REPORT</span></button>
+    </div>
+  </div>
+
+  <!-- Findings -->
+  <div class="panel full" style="margin-top:0">
+    <div class="panel-label">Vulnerability Findings</div>
+    <table class="findings-table">
+      <thead>
+        <tr>
+          <th>Severity</th><th>Vulnerability</th><th>Endpoint</th>
+          <th>CVSS</th><th>Vector</th><th>Remediation</th>
+        </tr>
+      </thead>
+      <tbody id="findingsBody">
+        <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;font-size:0.72rem">[ NO FINDINGS — EXECUTE SCAN TO POPULATE ]</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>
+    <span>VULNSCAN // PYTHON + FLASK BACKEND</span>
+    <span>OWASP TOP 10 · WAF/IDS BYPASS · STRUCTURED REPORTING</span>
+    <span id="clock">--:--:--</span>
+  </footer>
+</div>
+
+<script>
+  const API = "http://localhost:5000/api";
+  let currentScanId = null;
+  let pollInterval = null;
+  let startTime = null;
+  let durationInterval = null;
+
+  // Clock
+  setInterval(() => {
+    document.getElementById('clock').textContent = new Date().toTimeString().split(' ')[0];
+  }, 1000);
+
+  // Toggle modules
+  document.querySelectorAll('.scan-opt').forEach(opt => {
+    opt.addEventListener('click', () => opt.classList.toggle('active'));
+  });
+
+  // Check backend health on load
+  async function checkHealth() {
+    try {
+      const res = await fetch(`${API}/health`);
+      const data = await res.json();
+      if (data.status === 'online') {
+        setApiStatus(true, `Backend online — VulnScan ${data.version}`);
+        addLog('ok', `VulnScan ${data.version} — engine online`);
+        addLog('info', 'Awaiting target configuration...');
+      }
+    } catch(e) {
+      setApiStatus(false, 'Backend offline — start Flask server: python backend/app.py');
+      addLog('err', 'Cannot reach backend at localhost:5000');
+      addLog('muted', 'Run: cd backend && pip install -r requirements.txt && python app.py');
+    }
+  }
+
+  function setApiStatus(ok, msg) {
+    const banner = document.getElementById('apiBanner');
+    const dot = document.getElementById('apiDot');
+    banner.className = 'api-banner ' + (ok ? 'connected' : 'disconnected');
+    dot.style.background = ok ? 'var(--accent)' : 'var(--danger)';
+    document.getElementById('apiMsg').textContent = msg;
+    document.getElementById('engineStatus').textContent = ok ? 'ENGINE ONLINE' : 'ENGINE OFFLINE';
+  }
+
+  function addLog(type, msg) {
+    const terminal = document.getElementById('terminal');
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    const now = new Date().toTimeString().split(' ')[0];
+    line.innerHTML = `<span class="log-time">${now}</span><span class="log-${type}">${msg}</span>`;
+    terminal.appendChild(line);
+    terminal.scrollTop = terminal.scrollHeight;
+  }
+
+  function updateProgress(pct, label) {
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressPct').textContent = Math.round(pct) + '%';
+    document.getElementById('progressLabel').textContent = label;
+  }
+
+  function updateSeverityCounts(findings) {
+    const counts = { critical:0, high:0, medium:0, low:0 };
+    findings.forEach(f => { if (counts[f.severity] !== undefined) counts[f.severity]++; });
+    document.getElementById('critCount').textContent = counts.critical;
+    document.getElementById('highCount').textContent = counts.high;
+    document.getElementById('medCount').textContent = counts.medium;
+    document.getElementById('lowCount').textContent = counts.low;
+
+    const total = findings.length;
+    if (total > 0) {
+      document.getElementById('findingsDot').style.display = 'inline-block';
+      document.getElementById('findingsStatus').textContent = `ACTIVE FINDINGS: ${total}`;
+    }
+  }
+
+  function renderFindings(findings) {
+    const tbody = document.getElementById('findingsBody');
+    if (!findings.length) return;
+    tbody.innerHTML = '';
+    findings.forEach(f => {
+      const tr = document.createElement('tr');
+      const bypass = f.bypass_used ? `<span class="bypass-tag">${f.bypass_technique||'bypass'}</span>` : '';
+      tr.innerHTML = `
+        <td><span class="badge ${f.severity}">${f.severity}</span></td>
+        <td class="vuln-type">${f.type} ${bypass}</td>
+        <td style="color:var(--muted);font-size:0.7rem;font-family:monospace">${f.endpoint}</td>
+        <td style="color:${f.severity==='critical'?'var(--danger)':f.severity==='high'?'var(--warn)':f.severity==='medium'?'#ffd700':'var(--accent2)'};font-family:'Oxanium',sans-serif;font-weight:700">${f.cvss}</td>
+        <td style="color:var(--muted);font-size:0.7rem">${f.vector}</td>
+        <td style="font-size:0.68rem;color:var(--muted)">${f.remediation||''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    updateSeverityCounts(findings);
+  }
+
+  async function startScan() {
+    const target = document.getElementById('targetInput').value.trim();
+    if (!target) { addLog('err', 'No target specified.'); return; }
+
+    const modules = Array.from(document.querySelectorAll('.scan-opt.active'))
+      .map(el => el.dataset.mod).filter(Boolean);
+
+    // Reset UI
+    document.getElementById('terminal').innerHTML = '';
+    document.getElementById('findingsBody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px;font-size:0.72rem">[ SCANNING... ]</td></tr>';
+    ['critCount','highCount','medCount','lowCount'].forEach(id => document.getElementById(id).textContent = '0');
+    document.getElementById('reportBtn').disabled = true;
+    document.getElementById('waveform').style.display = 'flex';
+    document.getElementById('scanBtn').className = 'btn running';
+    document.getElementById('scanBtn').querySelector('span').textContent = '⟳ SCANNING...';
+    for (let i=0;i<10;i++) document.getElementById('mod'+i).className = 'module-item';
+
+    startTime = Date.now();
+    durationInterval = setInterval(() => {
+      const s = Math.floor((Date.now()-startTime)/1000);
+      document.getElementById('scanDuration').textContent = s + 's';
+    }, 1000);
+
+    try {
+      const res = await fetch(`${API}/scan/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, modules })
+      });
+      const data = await res.json();
+      if (data.error) { addLog('err', data.error); return; }
+
+      currentScanId = data.scan_id;
+      document.getElementById('scanId').textContent = currentScanId;
+      addLog('ok', `Scan started — ID: ${currentScanId}`);
+
+      // Start SSE stream for logs
+      const evtSource = new EventSource(`${API}/scan/${currentScanId}/stream`);
+      evtSource.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'done') { evtSource.close(); return; }
+        addLog(msg.type, msg.msg);
+      };
+
+      // Poll for status + findings
+      pollInterval = setInterval(() => pollScan(evtSource), 1500);
+
+    } catch(e) {
+      addLog('err', 'Failed to reach backend. Is Flask running?');
+      resetScanUI();
+    }
+  }
+
+  async function pollScan(evtSource) {
+    if (!currentScanId) return;
+    try {
+      const res = await fetch(`${API}/scan/${currentScanId}`);
+      const scan = await res.json();
+
+      updateProgress(scan.progress, getProgressLabel(scan.progress));
+      document.getElementById('reqCount').textContent = scan.requests_sent || '--';
+      document.getElementById('endpointCount').textContent = scan.endpoints_found || '--';
+      document.getElementById('wafDetected').textContent = scan.waf_detected || '--';
+      document.getElementById('bypassRate').textContent = scan.bypass_rate ? scan.bypass_rate + '%' : '--';
+
+      if (scan.findings?.length) renderFindings(scan.findings);
+
+      // Update module indicators based on progress
+      const modIdx = Math.floor((scan.progress / 100) * 9);
+      for (let i=0;i<=modIdx;i++) {
+        document.getElementById('mod'+i).className = i < modIdx ? 'module-item done' : 'module-item scanning';
+      }
+
+      if (scan.status === 'complete' || scan.status === 'aborted' || scan.status === 'error') {
+        clearInterval(pollInterval);
+        clearInterval(durationInterval);
+        if (evtSource) evtSource.close();
+        for (let i=0;i<10;i++) document.getElementById('mod'+i).className = 'module-item done';
+        resetScanUI();
+        if (scan.status === 'complete') {
+          document.getElementById('reportBtn').disabled = false;
+          updateProgress(100, 'SCAN COMPLETE');
+        }
+      }
+    } catch(e) {}
+  }
+
+  function getProgressLabel(pct) {
+    if (pct < 15) return 'CRAWLING ENDPOINTS';
+    if (pct < 30) return 'WAF FINGERPRINTING';
+    if (pct < 50) return 'INJECTION FUZZING';
+    if (pct < 65) return 'AUTH TESTING';
+    if (pct < 80) return 'IDOR ENUMERATION';
+    if (pct < 90) return 'HEADER AUDIT';
+    if (pct < 100) return 'GENERATING REPORT';
+    return 'COMPLETE';
+  }
+
+  async function abortScan() {
+    if (!currentScanId) return;
+    await fetch(`${API}/scan/${currentScanId}/abort`, { method: 'POST' });
+    addLog('warn', 'Scan aborted by operator.');
+    clearInterval(pollInterval);
+    clearInterval(durationInterval);
+    resetScanUI();
+  }
+
+  function resetScanUI() {
+    document.getElementById('scanBtn').className = 'btn';
+    document.getElementById('scanBtn').querySelector('span').textContent = '▶ EXECUTE SCAN';
+    document.getElementById('waveform').style.display = 'none';
+  }
+
+  async function downloadReport() {
+    if (!currentScanId) return;
+    window.open(`${API}/scan/${currentScanId}/report`, '_blank');
+  }
+
+  checkHealth();
+</script>
+</body>
+</html>
