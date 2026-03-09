@@ -57,19 +57,23 @@ class AuthScanner:
                 self.request_count += 1
 
                 if resp.status_code == 200 and "unauthorized" not in resp.text.lower():
+                    # CVSS v3.1: AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H = 9.8 Critical
+                    # Full auth bypass, no user interaction, network exploitable
                     findings.append({
                         "type": "JWT Algorithm Confusion (alg:none)",
-                        "severity": "high",
+                        "severity": "critical",
                         "endpoint": url,
                         "parameter": "Authorization header",
                         "payload": f"Bearer {fake_token[:40]}...",
-                        "cvss": "8.8",
+                        "cvss": "9.8",
+                        "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
                         "vector": "Auth Bypass",
                         "bypass_used": False,
                         "bypass_technique": None,
                         "remediation": (
-                            "Explicitly whitelist allowed JWT algorithms. "
-                            "Reject tokens with alg:none. Use a hardened JWT library."
+                            "Explicitly whitelist allowed JWT algorithms server-side. "
+                            "Reject tokens with alg:none or unexpected algorithm values. "
+                            "Use a hardened, actively maintained JWT library."
                         ),
                     })
             except Exception:
@@ -97,17 +101,25 @@ class AuthScanner:
                     if resp.status_code == 200 and any(
                         k in resp.text.lower() for k in ["dashboard", "welcome", "token", "success"]
                     ):
+                        # CVSS v3.1: AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H = 9.8 Critical
+                        # Default creds = full account takeover, no privileges required
                         findings.append({
                             "type": "Default Credentials Accepted",
-                            "severity": "high",
+                            "severity": "critical",
                             "endpoint": url,
                             "parameter": "username/password",
                             "payload": f"{user}:{pwd}",
-                            "cvss": "8.1",
+                            "cvss": "9.8",
+                            "cvss_vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
                             "vector": "Auth Bypass",
                             "bypass_used": False,
                             "bypass_technique": None,
-                            "remediation": "Enforce strong password policy. Remove all default credentials.",
+                            "remediation": (
+                                "Remove all default credentials immediately. "
+                                "Enforce strong password policy on all accounts. "
+                                "Implement account lockout after failed attempts. "
+                                "Add MFA to all privileged accounts."
+                            ),
                         })
                         break
                 except Exception:
