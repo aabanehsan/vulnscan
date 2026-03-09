@@ -135,20 +135,41 @@ class SQLiScanner:
         body_lower = body.lower()
         return any(sig in body_lower for sig in self.ERROR_SIGNATURES)
 
+    # Accurate CVSS v3.1 SQLi scores:
+    # Error-based / Union:   AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H = 9.8 Critical
+    # Time-based blind:      AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H = 8.1 High
+    # Auth-gated SQLi:       AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H = 8.8 High
+    # WAF bypass SQLi:       AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H = 8.1 High
+    SQLI_CVSS = {
+        "error":   ("9.8", "critical", "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"),
+        "time":    ("8.1", "high",     "AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H"),
+        "bypass":  ("8.1", "high",     "AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H"),
+        "auth":    ("8.8", "high",     "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H"),
+    }
+
     def _make_finding(self, vuln_type, url, param, payload, severity, cvss, bypass_used):
+        # Determine accurate CVSS based on vuln type
+        if bypass_used:
+            score, sev, vector = self.SQLI_CVSS["bypass"]
+        elif "time" in vuln_type.lower() or "blind" in vuln_type.lower():
+            score, sev, vector = self.SQLI_CVSS["time"]
+        else:
+            score, sev, vector = self.SQLI_CVSS["error"]
+
         return {
             "type": vuln_type,
-            "severity": severity,
+            "severity": sev,
             "endpoint": f"{url}?{param}=",
             "parameter": param,
             "payload": payload,
-            "cvss": cvss,
+            "cvss": score,
+            "cvss_vector": vector,
             "vector": "SQLi",
             "bypass_used": bypass_used,
             "bypass_technique": "WAF evasion via comment/encoding" if bypass_used else None,
             "remediation": (
                 "Use parameterized queries / prepared statements exclusively. "
                 "Never concatenate user input into SQL strings. "
-                "Apply least-privilege DB accounts."
+                "Apply least-privilege DB accounts and disable verbose DB errors in production."
             ),
         }
