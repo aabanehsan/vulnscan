@@ -37,18 +37,20 @@ class IDORScanner:
                             self.request_count += 1
                             if resp.status_code == 200 and len(resp.text) > 50:
                                 findings.append({
-                                    "type": "IDOR — Unauthorized Object Access",
+                                    "type": "IDOR — Unauthorized Object Access (BOLA)",
                                     "severity": "high",
                                     "endpoint": test_url,
                                     "parameter": "path parameter (id)",
                                     "payload": f"Modified ID: {test_id}",
-                                    "cvss": "8.1",
+                                    "cvss": "7.1",
+                                    "cvss_vector": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:L/A:N",
                                     "vector": "BOLA",
                                     "bypass_used": False,
                                     "bypass_technique": None,
                                     "remediation": (
-                                        "Implement object-level authorization checks on every request. "
-                                        "Use indirect object references. Verify ownership before serving data."
+                                        "Implement object-level authorization on every endpoint. "
+                                        "Verify resource ownership before returning data. "
+                                        "Use indirect/randomized object references (UUIDs)."
                                     ),
                                 })
                                 break
@@ -65,36 +67,47 @@ Header Scanner — Security misconfiguration via HTTP response headers
 
 
 class HeaderScanner:
+    # Accurate CVSS v3.1 scores for missing security headers
+    # HSTS missing:  AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N = 6.8 Medium (SSL stripping possible)
+    # X-Frame-Options missing: AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N = 6.1 Medium (clickjacking)
+    # CSP missing:   AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N = 6.1 Medium (XSS amplifier)
+    # X-Content-Type-Options: AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N = 4.6 Medium (MIME sniffing)
     REQUIRED_HEADERS = {
         "Strict-Transport-Security": {
             "severity": "medium",
-            "cvss": "5.3",
-            "remediation": "Add: Strict-Transport-Security: max-age=31536000; includeSubDomains",
+            "cvss": "6.8",
+            "cvss_vector": "AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N",
+            "remediation": "Add: Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
         },
         "X-Frame-Options": {
             "severity": "medium",
-            "cvss": "4.3",
-            "remediation": "Add: X-Frame-Options: DENY to prevent clickjacking.",
+            "cvss": "6.1",
+            "cvss_vector": "AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
+            "remediation": "Add: X-Frame-Options: DENY — prevents clickjacking attacks.",
         },
         "Content-Security-Policy": {
             "severity": "medium",
-            "cvss": "5.1",
-            "remediation": "Implement a strict Content-Security-Policy header.",
+            "cvss": "6.1",
+            "cvss_vector": "AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
+            "remediation": "Implement a strict Content-Security-Policy. Start with default-src 'self'.",
         },
         "X-Content-Type-Options": {
-            "severity": "low",
-            "cvss": "3.1",
-            "remediation": "Add: X-Content-Type-Options: nosniff",
+            "severity": "medium",
+            "cvss": "4.6",
+            "cvss_vector": "AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N",
+            "remediation": "Add: X-Content-Type-Options: nosniff — prevents MIME-type sniffing.",
         },
         "Referrer-Policy": {
             "severity": "low",
-            "cvss": "2.6",
+            "cvss": "3.1",
+            "cvss_vector": "AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N",
             "remediation": "Add: Referrer-Policy: strict-origin-when-cross-origin",
         },
         "Permissions-Policy": {
             "severity": "low",
-            "cvss": "2.1",
-            "remediation": "Add Permissions-Policy to restrict browser features.",
+            "cvss": "2.7",
+            "cvss_vector": "AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:N/A:N",
+            "remediation": "Add Permissions-Policy to restrict browser features (camera, mic, geolocation).",
         },
     }
 
@@ -123,6 +136,7 @@ class HeaderScanner:
                         "parameter": "HTTP Response Header",
                         "payload": "N/A",
                         "cvss": meta["cvss"],
+                        "cvss_vector": meta["cvss_vector"],
                         "vector": "Misconfiguration",
                         "bypass_used": False,
                         "bypass_technique": None,
